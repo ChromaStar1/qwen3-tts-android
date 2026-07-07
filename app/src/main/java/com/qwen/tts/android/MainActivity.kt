@@ -137,8 +137,8 @@ private data class BackendOption(val id: String, val label: String, val preferen
 private data class GenerationTimeEstimate(val totalMillis: Long, val sampleSize: Int)
 
 private val languageOptions = listOf(
-    LanguageOption("German", 2053),
     LanguageOption("English", 2050),
+    LanguageOption("German", 2053),
     LanguageOption("Spanish", 2054),
     LanguageOption("French", 2061),
     LanguageOption("Chinese", 2055),
@@ -205,7 +205,7 @@ private object QwenModel {
 }
 
 data class QwenTtsUiState(
-    val text: String = "Hello.",
+    val text: String = "Hello World from Qwen3 TTS running on Android on-device!",
     val selectedModelId: String = QwenModel.defaultVariant.id,
     val selectedBackendId: String = defaultBackendOption.id,
     val selectedVoiceId: String? = null,
@@ -229,7 +229,7 @@ data class QwenTtsUiState(
     val maxAudioTokens: Int = 512,
     val cpuThreads: Int = 0,
     val selectedCpuThreads: Int = 0,
-    val selectedLanguageId: Int = 2053,
+    val selectedLanguageId: Int = 2050,
     val tokenizeMillis: Long = 0,
     val encodeMillis: Long = 0,
     val generateMillis: Long = 0,
