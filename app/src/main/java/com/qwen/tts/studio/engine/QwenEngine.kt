@@ -3,6 +3,12 @@ package com.qwen.tts.studio.engine
 class QwenEngine : AutoCloseable {
     private var nativePtr: Long = 0
 
+    companion object {
+        const val BACKEND_AUTO: Int = 0
+        const val BACKEND_CPU: Int = 1
+        const val BACKEND_GPU: Int = 2
+    }
+
     class NativeParams(
         val languageId: Int = 2050,
         val instruction: String? = null,
@@ -16,7 +22,15 @@ class QwenEngine : AutoCloseable {
         val success: Boolean,
         val errorMsg: String?,
         val timeMs: Long,
-    )
+    ) {
+        val tokenizeMs: Long = 0L
+        val encodeMs: Long = 0L
+        val generateMs: Long = 0L
+        val decodeMs: Long = 0L
+        val decodeFrames: Int = 0
+        val decodeSamples: Long = 0L
+        val decodeGraphComputeMs: Long = 0L
+    }
 
     class NativeCapabilities(
         val loaded: Boolean,
@@ -52,6 +66,10 @@ class QwenEngine : AutoCloseable {
 
     fun getActiveBackendName(): String? = nativeGetActiveBackendName()
 
+    fun setBackendPreference(preference: Int): Boolean = nativeSetBackendPreference(preference)
+
+    fun getCompiledBackendMask(): Int = nativeGetCompiledBackendMask()
+
     fun setCpuThreads(nThreads: Int): Boolean = nativeSetCpuThreads(nThreads)
 
     fun getCpuThreads(): Int = nativeGetCpuThreads()
@@ -62,6 +80,17 @@ class QwenEngine : AutoCloseable {
     fun getModelCapabilities(): NativeCapabilities? =
         nativeGetModelCapabilities(nativePtr)
 
+    fun extractSpeakerEmbedding(referenceWav: String, outputPath: String): Boolean =
+        nativeExtractSpeakerEmbedding(nativePtr, referenceWav, outputPath)
+
+    fun getAvailableSpeakers(): List<String> {
+        val raw = nativeGetAvailableSpeakers(nativePtr).orEmpty()
+        return raw.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toList()
+    }
+
     override fun close() {
         if (nativePtr != 0L) {
             nativeFree(nativePtr)
@@ -71,6 +100,8 @@ class QwenEngine : AutoCloseable {
 
     private external fun nativeInit(): Long
     private external fun nativeFree(ptr: Long)
+    private external fun nativeSetBackendPreference(preference: Int): Boolean
+    private external fun nativeGetCompiledBackendMask(): Int
     private external fun nativeSetCpuThreads(nThreads: Int): Boolean
     private external fun nativeGetCpuThreads(): Int
     private external fun nativeSetProgressCallback(ptr: Long, callback: ProgressCallback?): Boolean
@@ -85,4 +116,6 @@ class QwenEngine : AutoCloseable {
     ): NativeResult
     private external fun nativeGetLastError(ptr: Long): String?
     private external fun nativeGetModelCapabilities(ptr: Long): NativeCapabilities?
+    private external fun nativeExtractSpeakerEmbedding(ptr: Long, referenceWav: String, outputPath: String): Boolean
+    private external fun nativeGetAvailableSpeakers(ptr: Long): String?
 }
