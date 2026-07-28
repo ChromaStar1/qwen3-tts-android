@@ -2,16 +2,18 @@ package com.qwen.tts.android.audio
 
 import android.content.Context
 import android.net.Uri
+import java.io.File
+import java.io.OutputStream
 
 /**
  * High-level "import voice from file" pipeline for voice cloning.
  *
- * Produces mono float32 PCM at [TARGET_SAMPLE_RATE] (24 kHz), matching what
- * qwen3-tts.cpp's speaker encoder (ECAPA-TDNN x-vector extractor) expects.
- * Feed the resulting [VoiceImportResult.pcm] into whichever JNI call your
- * mic-recording path already uses to extract the speaker embedding — the
- * encoder doesn't care whether the PCM came from a microphone or a file,
- * only that the sample rate/format match.
+ * Your app's native `extractSpeakerEmbedding(wavPath, embeddingOutPath)` call
+ * takes a WAV file path (same as the mic-recording flow writes to
+ * `reference.wav`), not a raw PCM array. So this writes a ready-to-use WAV
+ * file instead of returning samples directly — call [importToWav] and pass
+ * the resulting file path straight into `extractSpeakerEmbedding`, exactly
+ * like `stopVoiceRecordingAndCreate` already does for microphone recordings.
  */
 object VoiceCloneImporter {
 
@@ -21,8 +23,6 @@ object VoiceCloneImporter {
     private const val SILENCE_PAD_SECONDS = 0.5
 
     data class VoiceImportResult(
-        val pcm: FloatArray,
-        val sampleRate: Int,
         val durationSeconds: Float,
         val warnings: List<String>
     )
@@ -30,13 +30,15 @@ object VoiceCloneImporter {
     /**
      * Decodes [uri] (wav/mp3/m4a/ogg), downmixes to mono, resamples to 24kHz,
      * auto-trims to at most 30s (long reference audio can make qwen3-tts.cpp's
-     * generation hang), and by default appends 0.5s of silence at the end —
-     * this reduces a known artifact where the first generated phoneme "bleeds"
-     * from whatever sound the reference clip ends on.
+     * generation hang), pads 0.5s of silence at the end (reduces a known
+     * artifact where the first generated phoneme "bleeds" from whatever sound
+     * the reference clip ends on), and writes the result as a 16-bit PCM WAV
+     * to [outputFile].
      */
-    fun importFromFile(
+    fun importToWav(
         context: Context,
         uri: Uri,
+        outputFile: File,
         appendSilencePad: Boolean = true
     ): VoiceImportResult {
         val decoded = AudioFileDecoder.decodeToMono(context, uri)
@@ -67,11 +69,48 @@ object VoiceCloneImporter {
             pcm = pcm + FloatArray(padSamples) // zeros = silence
         }
 
+        outputFile.parentFile?.mkdirs()
+        outputFile.outputStream().use { writeWav(it, pcm, TARGET_SAMPLE_RATE) }
+
         return VoiceImportResult(
-            pcm = pcm,
-            sampleRate = TARGET_SAMPLE_RATE,
             durationSeconds = pcm.size.toFloat() / TARGET_SAMPLE_RATE,
             warnings = warnings
         )
+    }
+
+    /** Standard 16-bit PCM mono WAV writer (same format your app already uses). */
+    private fun writeWav(output: OutputStream, samples: FloatArray, sampleRate: Int) {
+        val dataBytes = samples.size * 2
+        output.writeAscii("RIFF")
+        output.writeIntLe(36 + dataBytes)
+        output.writeAscii("WAVE")
+        output.writeAscii("fmt ")
+        output.writeIntLe(16)
+        output.writeShortLe(1)
+        output.writeShortLe(1)
+        output.writeIntLe(sampleRate)
+        output.writeIntLe(sampleRate * 2)
+        output.writeShortLe(2)
+        output.writeShortLe(16)
+        output.writeAscii("data")
+        output.writeIntLe(dataBytes)
+        samples.forEach { sample ->
+            val clamped = sample.coerceIn(-1f, 1f)
+            output.writeShortLe((clamped * 32767f).toInt())
+        }
+    }
+
+    private fun OutputStream.writeAscii(text: String) = write(text.toByteArray(Charsets.US_ASCII))
+
+    private fun OutputStream.writeIntLe(value: Int) {
+        write(value and 0xFF)
+        write((value shr 8) and 0xFF)
+        write((value shr 16) and 0xFF)
+        write((value shr 24) and 0xFF)
+    }
+
+    private fun OutputStream.writeShortLe(value: Int) {
+        write(value and 0xFF)
+        write((value shr 8) and 0xFF)
     }
 }
