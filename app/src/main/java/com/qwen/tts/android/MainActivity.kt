@@ -582,7 +582,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
            val created = runCatching {
                withContext(Dispatchers.IO) {
                    val context = getApplication<Application>()
-                   val importResult = VoiceCloneImporter.importFromFile(context, uri)
+                   val importResult = VoiceCloneImporter.importToWav(context, uri)
 
                    val voiceId = "voice-${System.currentTimeMillis()}"
                    val targetDir = File(voiceDir, voiceId).apply { mkdirs() }
