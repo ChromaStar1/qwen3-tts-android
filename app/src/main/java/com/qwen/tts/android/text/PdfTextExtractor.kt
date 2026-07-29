@@ -14,17 +14,21 @@ import java.io.InputStream
  * but ideally call it once in Application.onCreate() instead.
  */
 object PdfTextExtractor {
-
     fun extract(context: Context, input: InputStream): String {
-        PDFBoxResourceLoader.init(context.applicationContext)
-        PDDocument.load(input).use { document ->
+        // Защищенный запуск инициализации библиотеки PDF
+        runCatching {
+            PDFBoxResourceLoader.init(context.applicationContext)
+        }
+        
+        return PDDocument.load(input).use { document ->
             val stripper = PDFTextStripper().apply {
                 sortByPosition = true
             }
-            return stripper.getText(document)
+            stripper.getText(document)
                 .replace(Regex("\\r\\n?"), "\n")
                 .replace(Regex("\n{3,}"), "\n\n")
                 .trim()
         }
     }
 }
+
